@@ -8,6 +8,9 @@ library(ggplot2)
 #library(reshape2)
 #library(purrr)
 
+options(scipen=999)
+
+
 data <- stream_in(file("data_role_assignment.json"))
 
 #params <- data$params
@@ -108,3 +111,43 @@ mean_IQRtimePerSessionAB <- timePerSessionAB %>% group_by(version) %>%
   summarise("mean_IQR_session_duration" = median(session_duration))
 
 
+
+###########################
+#Total userId
+users_total <- length(data$userId[!(is.na(data$userId))])
+users_unique_total <- length(unique(data$userId[!(is.na(data$userId))])) 
+
+#Number of registered users per version
+numUsersAB <- data %>% filter(!(is.na(userId))) %>% group_by(version) %>% 
+  summarise("n_users" = length(userId), "percentage" = 100 * n_users/users_total)
+
+#Number of unique registered users per version
+numUniqueUsersAB <- data %>% filter(!(is.na(userId))) %>% group_by(version) %>%
+  summarise("n_users" = length(unique(userId)), "percentage" = 100 * n_users/users_unique_total)
+
+
+
+
+##########################
+#Events driven per page across both versions
+eventsPerPage <- data %>% group_by(page, version) %>% 
+  summarise("n_events" = length(eventId)) %>% group_by(version) %>% arrange(desc(n_events))
+
+ggplot(eventsPerPage, aes(x=page, y=n_events, fill=version)) + 
+  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1))
+
+
+############################
+#Bounces per page across both versions
+
+bouncesPerPage <- data %>% group_by(sessionId, version, page) %>%
+  summarise("n_events" = n()) %>% filter(n_events == 1) %>% 
+  group_by(page, version) %>% summarise("n_bounces" = n()) %>% 
+  group_by(version) %>% mutate("prop_bounce_for_version" = n_bounces/sum(n_bounces)) %>%
+  arrange(desc(prop_bounce_for_version))
+  
+
+
+
+#Conversion from signup_type/signup_type_select page to select_occupation/signup_role_picker page
+#Assuming page
