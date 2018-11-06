@@ -1,5 +1,5 @@
 rm(list=ls())
-setwd("/home/tauro/Projects/quizziz")
+#setwd("/home/tauro/Projects/quizziz")
 
 library(jsonlite)
 library(lubridate)
@@ -149,5 +149,24 @@ bouncesPerPage <- data %>% group_by(sessionId, version, page) %>%
 
 
 
-#Conversion from signup_type/signup_type_select page to select_occupation/signup_role_picker page
-#Assuming page
+##################################
+#Proportion of non-bounces (a user not bouncing is assumed to be a success here)
+
+
+
+
+nonBouncePerVersion <- data %>% select(everything()) %>% group_by(sessionId, version) %>% 
+  summarise("n_events" = length(eventId)) %>%
+  group_by(version) %>% summarise("sessions_not_bounced" = length(sessionId[n_events > 1]),
+                                  "sessions_bounced" = length(sessionId[n_events == 1]),
+                                  "total_session" = length(sessionId))
+
+
+n_trials_A <- subset(nonBouncePerVersion, version=="A")$total_session
+n_trials_B <- subset(nonBouncePerVersion, version=="B")$total_session
+
+n_success_A <- subset(nonBouncePerVersion, version=="A")$sessions_not_bounced
+n_success_B <- subset(nonBouncePerVersion, version=="B")$sessions_not_bounced
+
+pA <- n_trials_A/n_success_A
+pB <- n_trials_B/n_success_B
