@@ -1,5 +1,5 @@
 rm(list=ls())
-#setwd("/home/tauro/Projects/quizziz")
+setwd("/home/tauro/Projects/quizziz")
 
 library(jsonlite)
 library(lubridate)
@@ -168,5 +168,54 @@ n_trials_B <- subset(nonBouncePerVersion, version=="B")$total_session
 n_success_A <- subset(nonBouncePerVersion, version=="A")$sessions_not_bounced
 n_success_B <- subset(nonBouncePerVersion, version=="B")$sessions_not_bounced
 
-pA <- n_trials_A/n_success_A
-pB <- n_trials_B/n_success_B
+pA <- n_success_A/n_trials_A
+pB <- n_success_B/n_trials_B
+
+
+
+x_a <- 1:25000
+y_a <- dbinom(x_a, n_trials_A, pA)
+
+x_b <- 1:25000
+y_b <- dbinom(x_b, n_trials_B, pB)
+
+df <- data.frame(x_a=x_a, y_a=y_a, x_b=x_b, y_b=y_b)
+
+
+options(repr.plot.width=5, repr.plot.height=3)
+cols = c("A"="green","B"="orange")
+
+ggplot(data = df)+
+  labs(x="Number of successes", y="Probability") + xlim(0, 25000) +
+  geom_point(aes(x=x_a, y=y_a, colour="A")) +
+  geom_point(aes(x=x_b, y=y_b, colour="B")) +
+  scale_colour_manual(name="Variants", values=cols)
+
+
+
+################################
+
+x_a = seq(from=0.005, to=0.95, by=0.00001)
+y_a = dnorm(x_a, mean = pA, sd = sqrt((pA * (1-pA))/25000))
+
+x_b = seq(from=0.005, to=0.95, by=0.00001)
+y_b = dnorm(x_b, mean = pB, sd = sqrt((pB * (1-pB))/25000))
+
+df = data.frame(x_a=x_a, y_a=y_a, x_b=x_b, y_b=y_b)
+options(repr.plot.width=7, repr.plot.height=3)
+cols = c("A"="green","B"="orange")
+ggplot(data = df)+
+  labs(x="Proportions value", y="Probability Density Function") +
+  geom_point(aes(x=x_a, y=y_a, colour="A")) + 
+  geom_point(aes(x=x_b, y=y_b, colour="B")) + 
+  scale_colour_manual(name="Variants", values=cols)
+
+
+###############################
+
+binom.test(n_success_B, 25000, p=pA, alternative="greater")
+
+binom.test(n_success_A, 25000, p=pB, alternative="less")
+
+alpha = 0.05
+qbinom(1 - alpha, 25000, pA)
