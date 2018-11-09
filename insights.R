@@ -32,7 +32,7 @@ data$serverTime <- ymd_hms(data$serverTime, tz="UTC")
 data$day <- day(data$serverTime) 
 data$month <- month(data$serverTime)
 data$hour <- hour(data$serverTime)
-data$wday <- wday(data$serverTime)
+data$wday <- wday(data$serverTime, label=TRUE)
 
 #data$serverTime <- NULL
 
@@ -104,11 +104,27 @@ mean_timePerSessionAB <- timePerSessionAB %>% filter(session_duration > 0) %>%
 ggplot(mean_timePerSessionAB, aes(x=version, y=mean_session_duration, fill=version)) +
   geom_bar(stat="identity")
 
+ggplot(timePerSessionAB, aes(x=session_duration, fill=version)) + 
+  geom_histogram(binwidth = 1, position = "dodge") + xlim(c(0, 20)) + ylim(0, 2000) +
+  scale_x_reverse()
+
+
+##
+timePerSessionABgrt300 <- timePerSessionAB %>% filter(session_duration > 50)
+
+ggplot(timePerSessionABgrt300, aes(x=session_duration, fill=version)) + 
+  geom_histogram(binwidth = 1, position = "dodge") + xlim(c(0, 4000)) + ylim(0, 5)
+
+
 #Mean IQR amount of time per session across both versions
 mean_IQRtimePerSessionAB <- timePerSessionAB %>% group_by(version) %>%
   filter(session_duration >= quantile(session_duration, 0.05) &
            session_duration <= quantile(session_duration, 0.95)) %>%
   summarise("mean_IQR_session_duration" = median(session_duration))
+
+
+
+
 
 
 
@@ -219,3 +235,55 @@ binom.test(n_success_A, 25000, p=pB, alternative="less")
 
 alpha = 0.05
 qbinom(1 - alpha, 25000, pA)
+
+#############################
+
+bounce_sessions <- data %>% select(everything()) %>% group_by(sessionId) %>%
+  summarise("n_events" = length(eventId), "version" = first(version)) %>% 
+  filter(n_events == 1)
+
+
+
+#Do any sessions use both versions? 
+bothversionSession <- subset(data, version=="A" & version=="B")
+#No
+
+
+##################################
+
+bouncesPerWDay <- data %>% select(everything()) %>% 
+  group_by(sessionId, wday) %>% summarise("n_events" = length(eventId)) %>% 
+  filter(n_events == 1) %>% group_by(wday) %>% summarise("n_bounces" = length(n_events))
+#bouncesPerWDay <- bouncesPerWDay[unique(bouncesPerWDay$sessionId),]
+
+ggplot(bouncesPerWDay, aes(x=wday, y=n_bounces, fill=wday)) + geom_bar(stat="identity")
+
+
+bounceRatePerWDay <- data %>% select(everything()) %>% 
+  group_by(sessionId, wday, version) %>% summarise("n_events" = length(eventId)) %>% 
+  group_by(wday, version) %>% 
+  summarise("bounce_rate" = 100 *(length(n_events == 1)/sum(n_events)))
+
+
+ggplot(bounceRatePerWDay, aes(x=wday, y=bounce_rate, fill=version)) + 
+  geom_bar(stat="identity", position="dodge")
+  
+
+##################
+
+bouncesPerDay <- data %>% select(everything()) %>% group_by(sessionId, day, wday, version) %>%
+  summarise("n_events" = length(eventId)) %>% filter(n_events == 1) %>%
+  group_by(day, wday, version) %>% summarise("n_bounces" = length(n_events))
+
+ggplot(bouncesPerDay, aes(x=paste(day, "\n", wday), y=n_bounces, fill=version)) + 
+  geom_bar(stat="identity", position="dodge") 
+
+
+bounceRatePerDay <- data %>% select(everything()) %>% 
+  group_by(sessionId, day, wday, version) %>% summarise("n_events" = length(eventId)) %>% 
+  group_by(day, wday, version) %>% 
+  summarise("bounce_rate" = 100 *(length(n_events == 1)/sum(n_events)))
+
+ggplot(bounceRatePerDay, aes(x=paste(day, "\n", wday), y=bounce_rate, fill=version)) + 
+  geom_bar(stat="identity", position="dodge") + xlab("Day")
+
