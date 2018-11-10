@@ -41,12 +41,26 @@ categorical_cols <- c("version", "eventId", "sessionId", "page", "userId", "day"
 
 data[categorical_cols] <- lapply(data[categorical_cols], factor)
 
+#Filling in missing userIds for same session
+data <- data %>% group_by(sessionId) %>% mutate("userId" = first(userId))
+
+data$is_reg <- as.integer(is.na(data$userId))
+
 
 ###############################
 
 #Number of events per session across both versions
-eventsPerSessionAB <- data %>% select(everything()) %>% group_by(sessionId, version) %>%
-  summarise("n_events" = length(eventId)) %>% arrange(desc(n_events)) 
+eventsPerSessionAB <- data %>% select(everything()) %>% 
+  group_by(sessionId, version, is_reg) %>% summarise("n_events" = length(eventId)) %>% 
+  arrange(desc(n_events)) 
+
+
+wilcox.test(n_events ~ version, data=eventsPerSessionAB)
+#The number of events for both versions are not identically distributed
+
+wilcox.test(n_events ~ is_reg, data=eventsPerSessionAB)
+#The number of events for registered and non_registered sessions are not identically distributed
+
 
 #Mean number of events per session across both versions (including bounces)
 mean_eventsPerSessionAB <- eventsPerSessionAB  %>% group_by(version) %>% 
@@ -86,6 +100,18 @@ timePerSessionAB <- data %>% select(sessionId, version, serverTime) %>%
   #summarise(last(serverTime), first(serverTime))
   summarise("session_duration" = as.numeric(last(serverTime) - first(serverTime),
                                             units = "mins"))
+
+session_duration_A <- c(timePerSessionAB[timePerSessionAB$version=="A",]$sessionId)
+session_duration_B <- c(timePerSessionAB[timePerSessionAB$version=="B",]$sessionId)
+
+
+shapiro.test(sample(session_duration_A, 3000))
+#Cannot assume normality, hence not idea to perform t-test directly
+
+wilcox.test(session_duration_A, session_duration_B, alternative="greater")
+
+t.test(session_duration_A, session_duration_B, alternative="greater")
+
 
 #Mean amount of time per session across both versions (including bounces)
 mean_timePerSessionAB <- timePerSessionAB %>% group_by(version) %>% 
@@ -173,9 +199,10 @@ bouncesPerPage <- data %>% group_by(sessionId, version, page) %>%
 
 nonBouncePerVersion <- data %>% select(everything()) %>% group_by(sessionId, version) %>% 
   summarise("n_events" = length(eventId)) %>%
-  group_by(version) %>% summarise("sessions_not_bounced" = length(sessionId[n_events > 1]),
-                                  "sessions_bounced" = length(sessionId[n_events == 1]),
-                                  "total_session" = length(sessionId))
+  group_by(version) %>% 
+  summarise("sessions_not_bounced" = length(sessionId[n_events > 1]), 
+            "sessions_bounced" = length(sessionId[n_events == 1]), 
+            "total_session" = length(sessionId))
 
 
 n_trials_A <- subset(nonBouncePerVersion, version=="A")$total_session
