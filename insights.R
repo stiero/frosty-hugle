@@ -39,12 +39,14 @@ data$wday <- wday(data$serverTime, label=TRUE)
 categorical_cols <- c("version", "eventId", "sessionId", "page", "userId", "day",
                       "month", "hour", "wday")
 
+data$wday <- as.factor(as.character(data$wday))
+
 data[categorical_cols] <- lapply(data[categorical_cols], factor)
 
 #Filling in missing userIds for same session
 data <- data %>% group_by(sessionId) %>% mutate("userId" = first(userId))
 
-data$is_reg <- as.integer(is.na(data$userId))
+data$is_reg <- as.factor(as.integer(is.na(data$userId)))
 
 
 ###############################
@@ -82,6 +84,13 @@ miqr_eventsPerSessionAB <- eventsPerSessionAB %>% group_by(version) %>%
 
 
 ################################
+
+#Has a session bounced or not? 
+
+bounced_yesno <- data %>% select(everything()) %>% 
+  group_by(sessionId, version, is_reg) %>% summarise("n_events" = length(eventId)) %>% 
+  mutate("bounced" = as.integer(!n_events == 1)) %>% ungroup() %>%
+  select(sessionId, bounced)
 
 #Which version has a higher bounce rate?
 
@@ -188,7 +197,8 @@ bouncesPerPage <- data %>% group_by(sessionId, version, page) %>%
   group_by(version) %>% mutate("prop_bounce_for_version" = n_bounces/sum(n_bounces)) %>%
   arrange(desc(prop_bounce_for_version))
   
-
+ggplot(bouncesPerPage, aes(x=page, y=prop_bounce_for_version, fill=version)) +
+  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1))
 
 
 ##################################
@@ -279,11 +289,13 @@ bothversionSession <- subset(data, version=="A" & version=="B")
 ##################################
 
 bouncesPerWDay <- data %>% select(everything()) %>% 
-  group_by(sessionId, wday) %>% summarise("n_events" = length(eventId)) %>% 
-  filter(n_events == 1) %>% group_by(wday) %>% summarise("n_bounces" = length(n_events))
+  group_by(sessionId, wday, version) %>% summarise("n_events" = length(eventId)) %>% 
+  filter(n_events == 1) %>% group_by(wday, version) %>% 
+  summarise("n_bounces" = length(n_events))
 #bouncesPerWDay <- bouncesPerWDay[unique(bouncesPerWDay$sessionId),]
 
-ggplot(bouncesPerWDay, aes(x=wday, y=n_bounces, fill=wday)) + geom_bar(stat="identity")
+ggplot(bouncesPerWDay, aes(x=wday, y=n_bounces, fill=version)) + 
+  geom_bar(stat="identity", position="dodge")
 
 
 bounceRatePerWDay <- data %>% select(everything()) %>% 
@@ -313,4 +325,59 @@ bounceRatePerDay <- data %>% select(everything()) %>%
 
 ggplot(bounceRatePerDay, aes(x=paste(day, "\n", wday), y=bounce_rate, fill=version)) + 
   geom_bar(stat="identity", position="dodge") + xlab("Day")
+
+#Time spent per page
+timeSpentPerPage <- data %>% group_by(sessionId, page, version, is_reg) %>% 
+  arrange(serverTime) %>%
+  summarise("time_spent_mins" = abs(as.numeric(first(serverTime) - last(serverTime),
+                                               units="mins")))
+
+mean_timeSpentPerPage <- timeSpentPerPage %>% group_by(page, version) %>% 
+  summarise("mean_time_spent_mins" = mean(time_spent_mins))
+
+ggplot(mean_timeSpentPerPage, aes(x=page, y=mean_time_spent_mins, fill=version)) +
+  geom_bar(stat="identity") +theme(axis.text.x = element_text(angle=45, hjust=1))
+
+
+
+############SESSION MASTER#############
+session_data <- left_join(eventsPerSessionAB, timePerSessionAB, 
+                          by=c("sessionId", "version"))
+
+session_data <- left_join(session_data, bounced_yesno, by="sessionId")
+
+session_data <- merge(session_data, data[,c("sessionId", "wday", "day")], by="sessionId")
+
+session_data$bounced <- as.factor(session_data$bounced)
+session_data$is_reg <- as.factor(session_data$is_reg)
+
+library(polycor)
+
+#hetcor(session_data[,- which(names(session_data) %in% c("sessionId", "day"))])
+
+hetcor(session_data$bounced, session_data$n_events)
+#hetcor(session_data$bounced, session_data$session_duration)
+
+hetcor(session_data$is_reg, session_data$n_events)
+hetcor(session_data$version, session_data$n_events)
+
+#hetcor(session_data$is_reg, session_data$session_duration)
+
+summary(aov(n_events ~ wday, data = session_data))
+#There are statistically significant differences in groups of wday wrt n_events
+
+summary(aov(session_duration ~ wday, data = session_data))
+#There are statistically significant differences in groups of wday wrt session_duration
+
+
+summary(aov(n_events ~ is_reg, data = session_data))
+#There are statistically significant differences in groups of is_reg wrt n_events
+
+summary(aov(session_duration ~ is_reg, data = session_data))
+#There are statistically significant differences in groups of is_reg wrt session_duration
+
+
+ggplot(session_data, aes(group=bounced, y=n_events)) + geom_boxplot()
+
+
 
