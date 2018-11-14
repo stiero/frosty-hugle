@@ -57,11 +57,18 @@ eventsPerSessionAB <- data %>% select(everything()) %>%
   arrange(desc(n_events)) 
 
 
+shapiro.test(sample(eventsPerSessionAB$n_events, 3000))
+#Cannot assume normality, hence not ideal to perform t-test directly
+
+
 wilcox.test(n_events ~ version, data=eventsPerSessionAB)
 #The number of events for both versions are not identically distributed
 
 wilcox.test(n_events ~ is_reg, data=eventsPerSessionAB)
 #The number of events for registered and non_registered sessions are not identically distributed
+
+ggplot(eventsPerSessionAB, aes(x=version, y=n_events, fill=version)) + 
+  geom_bar(stat="identity")
 
 
 #Mean number of events per session across both versions (including bounces)

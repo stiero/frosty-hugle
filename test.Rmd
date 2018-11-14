@@ -1,0 +1,107 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+rm(list=ls())
+setwd("/home/tauro/Projects/quizziz")
+
+library(jsonlite)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+#library(reshape2)
+#library(purrr)
+
+options(scipen=999)
+```
+
+```{r}
+data <- stream_in(file("data_role_assignment.json"))
+```
+
+```{r}
+#Some data preprocessing
+params <- lapply(data$params, "[[", 2)
+params <- setNames(do.call(rbind.data.frame, params), 
+                       c("sessionId", "page", "userId"))
+
+data$params <- NULL
+
+data <- cbind(data, params)
+
+rm(params)
+
+
+data$serverTime <- ymd_hms(data$serverTime, tz="UTC")
+
+data$day <- day(data$serverTime) 
+data$month <- month(data$serverTime)
+data$hour <- hour(data$serverTime)
+data$wday <- wday(data$serverTime, label=TRUE)
+
+categorical_cols <- c("version", "eventId", "sessionId", "page", "userId", "day",
+                      "month", "hour", "wday")
+
+data$wday <- as.factor(as.character(data$wday))
+
+data[categorical_cols] <- lapply(data[categorical_cols], factor)
+
+#Filling in missing userIds for the same session
+data <- data %>% group_by(sessionId) %>% mutate("userId" = first(userId))
+
+data$is_reg <- as.factor(as.integer(is.na(data$userId)))
+```
+  
+<br />
+
+The first metric we look at is the number of events. Here, *n_events* is the number of events for a particular session. 
+```{r}
+#Number of events per session across both versions
+eventsPerSessionAB <- data %>% select(everything()) %>% 
+  group_by(sessionId, version, is_reg) %>% summarise("n_events" = length(eventId)) %>% 
+  arrange(desc(n_events)) 
+
+eventsPerSessionAB
+```
+<br />
+  
+Testing for normality of *n_events* through a random sample (Shapiro's test)
+```{r}
+shapiro.test(sample(eventsPerSessionAB$n_events, 3000))
+#Cannot assume normality, hence not ideal to perform t-test directly
+
+```
+  
+  
+  
+<br />
+The results clearly show conclusive evidence against the null hypothesis (that *n_events* is normally distributed)
+  
+  
+Usually, one performs a two-sample Student's t-test of the means of two populations. But since the t-test assumes the data to be normally distributed and our data indicates otherwise, we need an alternative. 
+  
+  
+We perform the Mann-Whitney-Wilcox test which does not assume normality.
+
+```{r}
+wilcox.test(n_events ~ version, data=eventsPerSessionAB)
+#The number of events for both versions are not identically distributed
+
+wilcox.test(n_events ~ is_reg, data=eventsPerSessionAB)
+#The number of events for registered and non_registered sessions are not identically distributed
+
+
+```
+  
+<br />
+
+Based on the results of the Mann-Whitney-Wilcox test, we can conclude that the differences in *n_events* by version and registered status are statistically significant
+```{r}
+
+```
+
+
+
