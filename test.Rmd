@@ -21,9 +21,9 @@ options(scipen=999)
 ```{r}
 data <- stream_in(file("data_role_assignment.json"))
 ```
+Some data preprocessing
 
 ```{r}
-#Some data preprocessing
 params <- lapply(data$params, "[[", 2)
 params <- setNames(do.call(rbind.data.frame, params), 
                        c("sessionId", "page", "userId"))
@@ -57,6 +57,8 @@ data$is_reg <- as.factor(as.integer(is.na(data$userId)))
   
 <br />
 
+### Number of events (n_events)
+
 The first metric we look at is the number of events. Here, *n_events* is the number of events for a particular session. 
 ```{r}
 #Number of events per session across both versions
@@ -86,22 +88,99 @@ Usually, one performs a two-sample Student's t-test of the means of two populati
   
 We perform the Mann-Whitney-Wilcox test which does not assume normality.
 
+1) n_events grouped by version
+
+
 ```{r}
 wilcox.test(n_events ~ version, data=eventsPerSessionAB)
-#The number of events for both versions are not identically distributed
-
-wilcox.test(n_events ~ is_reg, data=eventsPerSessionAB)
-#The number of events for registered and non_registered sessions are not identically distributed
-
 
 ```
+The number of events for both versions are not identically distributed
+
+<br />
+2) n_events grouped by registration status  
+
+```{r}
+wilcox.test(n_events ~ is_reg, data=eventsPerSessionAB)
+
+```
+The number of events for registered and non_registered sessions are not identically distributed
   
+Based on the results of the Mann-Whitney-Wilcox test, we can conclude that the differences in *n_events* by version and registered status are statistically significant
+
 <br />
 
-Based on the results of the Mann-Whitney-Wilcox test, we can conclude that the differences in *n_events* by version and registered status are statistically significant
+Plotting n_events by version
+
 ```{r}
+ggplot(eventsPerSessionAB, aes(x=version, y=n_events, fill=version)) + 
+  geom_bar(stat="identity")
+```
+
+<br />
+
+Now we look at the mean number of events per session across both versions (including bounces)
+
+
+```{r}
+mean_eventsPerSessionAB_inc_bounce <- eventsPerSessionAB  %>% group_by(version) %>% 
+  summarise("mean_n_events" = mean(n_events))
+
+mean_eventsPerSessionAB_inc_bounce
+```
+
+```{r}
+ggplot(mean_eventsPerSessionAB_inc_bounce, aes(x=version, y=mean_n_events, fill=version)) + geom_bar(stat="identity")
 
 ```
+Similarly we look at the mean number of events per session across both versions (excluding bounces)
+
+```{r}
+mean_eventsPerSessionAB_exc_bounce <- eventsPerSessionAB %>% filter(n_events > 1) %>% 
+  group_by(version) %>% summarise("mean_n_events" = mean(n_events))
+
+mean_eventsPerSessionAB_exc_bounce
+```
+```{r}
+ggplot(mean_eventsPerSessionAB_exc_bounce, aes(x=version, y=mean_n_events, fill=version)) + geom_bar(stat="identity")
+
+```
+Here, we can see that version B generates more number of events and consequently has a higher number of mean events. 
+
+
+<br />
+
+### Bounce rate
+Now we look at a second metric, the bounce rate (bounce_rate), which is the proportion of sessions that ended after landing on one page only.
+
+Has a session bounced or not? Flagging 1 for 'yes' and 0 for 'no'.
+
+```{r}
+bounced_yesno <- data %>% select(everything()) %>% 
+  group_by(sessionId, version, is_reg) %>% summarise("n_events" = length(eventId)) %>% 
+  mutate("bounced" = as.integer(!n_events == 1)) %>% ungroup() %>%
+  select(sessionId, bounced)
+
+bounced_yesno$bounced <- as.factor(bounced_yesno$bounced)
+
+bounced_yesno
+```
+```{r}
+ggplot(bounced_yesno, aes(x=bounced, fill=bounced)) + geom_bar(stat="count")
+```
+
+
+```{r}
+bounce_rate <- eventsPerSessionAB %>% filter(n_events == 1) %>% group_by(version) %>%
+  summarise("bounce_rate" = 100 * (length(n_events)/length(eventsPerSessionAB$n_events)))
+
+bounce_rate
+```
+```{r}
+ggplot(bounce_rate, aes(x=version, y=bounce_rate, fill=version)) + 
+  geom_bar(stat="identity")
+```
+We see that version A has a much higher bounce rate. 
 
 
 
