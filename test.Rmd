@@ -19,8 +19,10 @@ options(scipen=999)
 ```
 
 ```{r}
-data <- stream_in(file("data_role_assignment.json"))
+data <- stream_in(file("data_role_assignment.json"), verbose = FALSE)
 ```
+<br />
+
 Some data preprocessing
 
 ```{r}
@@ -57,7 +59,7 @@ data$is_reg <- as.factor(as.integer(is.na(data$userId)))
   
 <br />
 
-### Number of events (n_events)
+### Metric 1) Number of events (n_events)
 
 The first metric we look at is the number of events. Here, *n_events* is the number of events for a particular session. 
 ```{r}
@@ -70,6 +72,8 @@ eventsPerSessionAB
 ```
 <br />
   
+We can try to perform a statistical test here. But before that, we need to see if the variable of interest is normally distributed. 
+
 Testing for normality of *n_events* through a random sample (Shapiro's test)
 ```{r}
 shapiro.test(sample(eventsPerSessionAB$n_events, 3000))
@@ -150,8 +154,194 @@ Here, we can see that version B generates more number of events and consequently
 
 <br />
 
-### Bounce rate
-Now we look at a second metric, the bounce rate (bounce_rate), which is the proportion of sessions that ended after landing on one page only.
+We now check which pages drove how many events
+
+```{r}
+eventsPerPage <- data %>% group_by(page, version) %>% 
+  summarise("n_events" = length(eventId)) %>% group_by(version) %>% arrange(desc(n_events))
+
+eventsPerPage
+```
+
+```{r}
+ggplot(eventsPerPage, aes(x=page, y=n_events, fill=version)) + 
+  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+
+<br />
+
+### Time spent in a session (session_duration)
+Now we look at a second metric, the duration of time spent by users on both versions.
+
+```{r}
+timePerSessionAB <- data %>% select(sessionId, version, serverTime) %>% 
+  arrange(serverTime) %>%
+  group_by(sessionId, version) %>% 
+  summarise("session_duration" = as.numeric(last(serverTime) - first(serverTime),
+                                            units = "mins"))
+
+timePerSessionAB
+```
+
+<br /> 
+
+We could perform a statistical test, so we test for normality again. 
+
+```{r}
+session_duration_A <- c(timePerSessionAB[timePerSessionAB$version=="A",]$sessionId)
+session_duration_B <- c(timePerSessionAB[timePerSessionAB$version=="B",]$sessionId)
+
+
+shapiro.test(sample(session_duration_A, 3000))
+shapiro.test(sample(session_duration_B, 3000))
+```
+Since the p-value is close to zero, the null hypothesis is rejected and session duration variables (for both versions) are not normally distributed. 
+
+Hence we perform the Mann-Whitney-Wilcox test again, just to be more confident of the results. 
+
+```{r}
+wilcox.test(session_duration_A, session_duration_B, alternative="greater")
+```
+The null hypothesis is that there is no difference between the means of the two populations. Because the p-value is lower than the threshold (0.05 by default), it is rejected. 
+
+We see that the session durations for the two versions likely come from two different populations. This again suggests there is a statistical difference between the two versions. 
+
+<br /> 
+
+Now we perform a Student's t-test anyway, just to compare it with the one above.
+```{r}
+t.test(session_duration_A, session_duration_B, alternative="greater")
+```
+The p-value is almost identical to the one obtained in the Wilcox test and the null hypothesis is again rejected. 
+
+
+Now we look at the mean amount of time per session across both versions (including bounces).
+
+```{r}
+mean_timePerSessionAB <- timePerSessionAB %>% filter(session_duration > 0) %>%
+  group_by(version) %>% summarise("mean_session_duration" = mean(session_duration))
+
+mean_timePerSessionAB
+```
+```{r}
+ggplot(mean_timePerSessionAB, aes(x=version, y=mean_session_duration, fill=version)) +
+  geom_bar(stat="identity")
+```
+We see that, on average, people spend more time on version A. 
+
+Since all the pages contained in the data are registration-related, it is my assumption that something is causing users on version A to spend more time on this task.   
+
+This can potentially have undesirable effects, because people usually want to be done with it as quickly as possible. 
+
+
+<br /r>
+
+Looking at the mean time spent per page - 
+
+```{r}
+mean_timeSpentPerPage <- timeSpentPerPage %>% group_by(page, version) %>% 
+  summarise("mean_time_spent_mins" = mean(time_spent_mins)) %>% arrange(desc(mean_time_spent_mins))
+
+mean_timeSpentPerPage
+```
+```{r}
+ggplot(mean_timeSpentPerPage, aes(x=page, y=mean_time_spent_mins, fill=version)) +
+  geom_bar(stat="identity") +theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+While version A overall sees more time spent on average, the 'signup_type_select' page of version B sees an inordinately higher number for that metric.
+
+
+
+
+
+
+
+
+<br /r>
+
+### Metric 3 - Number of registered users (n_users)
+
+The number of registered users can be seen here -
+```{r}
+users_total <- length(data$userId[!(is.na(data$userId))])
+users_total
+```
+
+Of these, the number of unique users are - 
+```{r}
+users_unique_total <- length(unique(data$userId[!(is.na(data$userId))])) 
+users_unique_total
+```
+
+
+Now we look at the number of registered users per version.
+```{r}
+numUsersAB <- data %>% filter(!(is.na(userId))) %>% group_by(version) %>% 
+  summarise("n_users" = length(userId), "percentage" = 100 * n_users/users_total)
+
+numUsersAB
+```
+```{r}
+ggplot(numUsersAB, aes(x=version, y=n_users, fill=version)) + 
+  geom_bar(stat="identity")
+```
+
+
+More than twice as many registered users end up on version B. This means the bulk of users on version A are unregistered. 
+
+<br />
+
+Just to be sure, we look at the number of unique registered users per version. 
+
+```{r}
+numUniqueUsersAB <- data %>% filter(!(is.na(userId))) %>% group_by(version) %>%
+  summarise("n_users" = length(unique(userId)), "percentage" = 100 * n_users/users_unique_total)
+
+numUniqueUsersAB
+
+```
+```{r}
+ggplot(numUniqueUsersAB, aes(x=version, y=n_users, fill=version)) + 
+  geom_bar(stat="identity")
+```
+
+Again, we see a similar pattern. More registered users going to B than A. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+< br /> 
+### Metric 4- Bounce rate
+The metric we inspect next is the bounce rate (bounce_rate), which is the proportion of sessions that ended after landing on one page only.
 
 Has a session bounced or not? Flagging 1 for 'yes' and 0 for 'no'.
 
@@ -165,11 +355,11 @@ bounced_yesno$bounced <- as.factor(bounced_yesno$bounced)
 
 bounced_yesno
 ```
-```{r}
-ggplot(bounced_yesno, aes(x=bounced, fill=bounced)) + geom_bar(stat="count")
-```
 
 
+<br />
+
+We now look at the bounce rate itself for each version
 ```{r}
 bounce_rate <- eventsPerSessionAB %>% filter(n_events == 1) %>% group_by(version) %>%
   summarise("bounce_rate" = 100 * (length(n_events)/length(eventsPerSessionAB$n_events)))
@@ -180,7 +370,196 @@ bounce_rate
 ggplot(bounce_rate, aes(x=version, y=bounce_rate, fill=version)) + 
   geom_bar(stat="identity")
 ```
-We see that version A has a much higher bounce rate. 
+We see that version A has a much higher bounce rate, about twice as much as B. 
+
+
+<br />
+
+We now investigate the bounce rate across pages.
+
+```{r}
+bouncesPerPage <- data %>% group_by(sessionId, version, page) %>%
+  summarise("n_events" = n()) %>% filter(n_events == 1) %>% 
+  group_by(page, version) %>% summarise("n_bounces" = n()) %>% 
+  group_by(version) %>% mutate("prop_bounce_for_version" = n_bounces/sum(n_bounces)) %>%
+  arrange(desc(prop_bounce_for_version))
+
+bouncesPerPage
+```
+```{r}
+ggplot(bouncesPerPage, aes(x=page, y=prop_bounce_for_version, fill=version)) +
+  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+We see that pages contained in version A consistently have a higher bounce rate than their corresponding version B pages.  
+
+<br />
+
+We can investigate the number of bounces per day of the week. 
+
+```{r}
+bouncesPerWDay <- data %>% select(everything()) %>% 
+  group_by(sessionId, wday, version) %>% summarise("n_events" = length(eventId)) %>% 
+  filter(n_events == 1) %>% group_by(wday, version) %>% 
+  summarise("n_bounces" = length(n_events))
+
+bouncesPerWDay
+```
+```{r}
+ggplot(bouncesPerWDay, aes(x=wday, y=n_bounces, fill=version)) + 
+  geom_bar(stat="identity", position="dodge")
+```
+
+<br /> 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### So far, most of what we have seen are charts and tables constructed from the population. They give us a hint but aren't statistically robust to be counted as definitive evidence. 
+
+#### It is better we perform a formal statistical experiment (an A-B test) using the metric we have derived above. 
+
+We derive the proportion of non-bounces (a user not bouncing is assumed to be a success here). 
+
+```{r}
+nonBouncePerVersion <- data %>% select(everything()) %>% group_by(sessionId, version) %>% 
+  summarise("n_events" = length(eventId)) %>%
+  group_by(version) %>% 
+  summarise("sessions_not_bounced" = length(sessionId[n_events > 1]), 
+            "sessions_bounced" = length(sessionId[n_events == 1]), 
+            "total_session" = length(sessionId))
+
+nonBouncePerVersion
+```
+<br />
+
+Now, we find the ratio of non-bounces (successes) to the total number of visitors (trials) for each version.
+
+```{r}
+vec_A <- c()
+vec_B <- c()
+vec_labs <- c("num_trials", "num_successes", "proportion_successful")
+
+n_trials_A <- subset(nonBouncePerVersion, version=="A")$total_session
+vec_A <- c(vec_A, n_trials_A)
+
+n_trials_B <- subset(nonBouncePerVersion, version=="B")$total_session
+vec_B <- c(vec_B, n_trials_B)
+
+n_success_A <- subset(nonBouncePerVersion, version=="A")$sessions_not_bounced
+vec_A <- c(vec_A, n_success_A)
+
+
+n_success_B <- subset(nonBouncePerVersion, version=="B")$sessions_not_bounced
+vec_B <- c(vec_B, n_success_B)
+
+
+pA <- n_success_A/n_trials_A
+vec_A <- c(vec_A, pA)
+
+pB <- n_success_B/n_trials_B
+vec_B <- c(vec_B, pB)
+
+prop_success <- data.frame("Metric" = vec_labs, "Version A" = vec_A, "Version B" = vec_B)
+
+prop_success
+```
+Now that we have obtained the values for pA and pB, we may use this information in the test. 
+
+<br />
+
+Since this is a yes-no evaluation, we can perform a Binomial test and use the binomial distribution to approximate the pattern of successes. 
+
+< br />
+
+
+Here, we perform a Binomial test with the null hypothesis being that pA is greater than n_success_B/25,000 trials (~pB).
+```{r}
+binom.test(n_success_B, 25000, p=pA, alternative="greater")
+
+```
+With a p-value this low, we can reject the null hypothesis and conclude that pA is extremely unlikely to be greater than pB. 
+
+<br />
+
+Similary, another Binomial test with the null hypothesis being that pB is lesser than ~pA
+```{r}
+binom.test(n_success_A, 25000, p=pB, alternative="less")
+
+```
+Again, the test shows that pB is most likely higher than pA. ie, version B has a higher rate of success. 
+
+
+As the actual number of trials are ~25,000 for A and B, we give each version that many trials in the A-B test also. 
+
+
+```{r}
+x_A <- 1:25000
+y_A <- dbinom(x_A, n_trials_A, pA)
+
+x_B <- 1:25000
+y_B <- dbinom(x_B, n_trials_B, pB)
+
+df <- data.frame(x_A=x_A, y_A=y_A, x_B=x_B, y_B=y_B)
+
+
+options(repr.plot.width=5, repr.plot.height=3)
+cols = c("A"="green","B"="orange")
+
+ggplot(data = df)+
+  labs(x="Number of successes", y="Probability") + xlim(0, 25000) +
+  geom_point(aes(x=x_A, y=y_A, colour="A")) +
+  geom_point(aes(x=x_B, y=y_B, colour="B")) +
+  scale_colour_manual(name="Variants", values=cols)
+```
+From the binomial distribution using our values of pA and pB, it is clear that version B has a higher number of successes. 
+
+It would appear that version B is likely the better one. 
+
+<br /> 
+
+However, this experiment is only a single trial. Ideally, we would like to repeat this experiment several times just to be certain that our observations are correct. 
+
+
+To achieve this, we employ the Central Limit Theorem to (safely) assume that the means of a large number of independent, identically distributed variables are normally distributed.
+
+Because of this, we can instead model the data under a normal distribution this time around. 
+
+```{r}
+x_A_clt = seq(from=0.005, to=0.95, by=0.00001)
+y_A_clt = dnorm(x_A_clt, mean = pA, sd = sqrt((pA * (1-pA))/25000))
+
+x_B_clt = seq(from=0.005, to=0.95, by=0.00001)
+y_B_clt = dnorm(x_B_clt, mean = pB, sd = sqrt((pB * (1-pB))/25000))
+
+df = data.frame(x_A_clt=x_A_clt, y_A_clt=y_A_clt, x_B_clt=x_B_clt, y_B_clt=y_B_clt)
+options(repr.plot.width=7, repr.plot.height=3)
+cols = c("A"="green","B"="orange")
+ggplot(data = df)+
+  labs(x="Proportions value", y="Probability Density Function") +
+  geom_point(aes(x=x_A_clt, y=y_A_clt, colour="A")) + 
+  geom_point(aes(x=x_B_clt, y=y_B_clt, colour="B")) + 
+  scale_colour_manual(name="Variants", values=cols)
+```
+
+Even with the repeated trials, we can see that version B outperforms version A with virtually no overlap. 
+
+We can state with reasonable confidence that version B is the better one. 
+
+
+
+NB- Along with a few more data projections, I did a some ANOVA and correlation tests, but for the sake of avoiding needless redundancy and having generated a conclusion even without them, I chose not to include them in the document. They are still accessible in my code (insights.R)

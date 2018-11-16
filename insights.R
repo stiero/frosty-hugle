@@ -99,6 +99,8 @@ bounced_yesno <- data %>% select(everything()) %>%
   mutate("bounced" = as.integer(!n_events == 1)) %>% ungroup() %>%
   select(sessionId, bounced)
 
+bounced_yesno$bounced <- as.factor(bounced_yesno$bounced)
+
 #Which version has a higher bounce rate?
 
 bounce_rate <- eventsPerSessionAB %>% filter(n_events == 1) %>% group_by(version) %>%
@@ -233,13 +235,13 @@ pB <- n_success_B/n_trials_B
 
 
 
-x_a <- 1:25000
-y_a <- dbinom(x_a, n_trials_A, pA)
+x_A <- 1:25000
+y_A <- dbinom(x_A, n_trials_A, pA)
 
-x_b <- 1:25000
-y_b <- dbinom(x_b, n_trials_B, pB)
+x_B <- 1:25000
+y_B <- dbinom(x_B, n_trials_B, pB)
 
-df <- data.frame(x_a=x_a, y_a=y_a, x_b=x_b, y_b=y_b)
+df <- data.frame(x_A=x_A, y_A=y_A, x_B=x_B, y_B=y_B)
 
 
 options(repr.plot.width=5, repr.plot.height=3)
@@ -255,19 +257,19 @@ ggplot(data = df)+
 
 ################################
 
-x_a = seq(from=0.005, to=0.95, by=0.00001)
-y_a = dnorm(x_a, mean = pA, sd = sqrt((pA * (1-pA))/25000))
+x_A_clt = seq(from=0.005, to=0.95, by=0.00001)
+y_A_clt = dnorm(x_A_clt, mean = pA, sd = sqrt((pA * (1-pA))/25000))
 
-x_b = seq(from=0.005, to=0.95, by=0.00001)
-y_b = dnorm(x_b, mean = pB, sd = sqrt((pB * (1-pB))/25000))
+x_B_clt = seq(from=0.005, to=0.95, by=0.00001)
+y_B_clt = dnorm(x_B_clt, mean = pB, sd = sqrt((pB * (1-pB))/25000))
 
-df = data.frame(x_a=x_a, y_a=y_a, x_b=x_b, y_b=y_b)
+df = data.frame(x_A_clt=x_A_clt, y_A_clt=y_A_clt, x_B_clt=x_B_clt, y_B_clt=y_B_clt)
 options(repr.plot.width=7, repr.plot.height=3)
 cols = c("A"="green","B"="orange")
 ggplot(data = df)+
   labs(x="Proportions value", y="Probability Density Function") +
-  geom_point(aes(x=x_a, y=y_a, colour="A")) + 
-  geom_point(aes(x=x_b, y=y_b, colour="B")) + 
+  geom_point(aes(x=x_A_clt, y=y_A_clt, colour="A")) + 
+  geom_point(aes(x=x_B_clt, y=y_B_clt, colour="B")) + 
   scale_colour_manual(name="Variants", values=cols)
 
 
