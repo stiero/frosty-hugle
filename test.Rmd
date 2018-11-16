@@ -1,19 +1,16 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Quizizz data analysis"
+output: html_document
 ---
 
 
-```{r}
+```{r message=FALSE}
 rm(list=ls())
-setwd("/home/tauro/Projects/quizziz")
 
 library(jsonlite)
 library(lubridate)
 library(dplyr)
 library(ggplot2)
-#library(reshape2)
-#library(purrr)
 
 options(scipen=999)
 ```
@@ -59,7 +56,7 @@ data$is_reg <- as.factor(as.integer(is.na(data$userId)))
   
 <br />
 
-### Metric 1) Number of events (n_events)
+> ###Metric 1 - Number of events (n_events)
 
 The first metric we look at is the number of events. Here, *n_events* is the number of events for a particular session. 
 ```{r}
@@ -118,7 +115,9 @@ Plotting n_events by version
 
 ```{r}
 ggplot(eventsPerSessionAB, aes(x=version, y=n_events, fill=version)) + 
-  geom_bar(stat="identity")
+  geom_bar(stat="identity") + labs(y="number of events", title="Number of events per version") + 
+  theme(plot.title = element_text(hjust = 0.5))
+
 ```
 
 <br />
@@ -134,9 +133,13 @@ mean_eventsPerSessionAB_inc_bounce
 ```
 
 ```{r}
-ggplot(mean_eventsPerSessionAB_inc_bounce, aes(x=version, y=mean_n_events, fill=version)) + geom_bar(stat="identity")
+ggplot(mean_eventsPerSessionAB_inc_bounce, aes(x=version, y=mean_n_events, fill=version)) + geom_bar(stat="identity") +
+  labs(y="Mean number of events", title="Mean number of events per version (including bounces)") + 
+  theme(plot.title = element_text(hjust = 0.5))
 
 ```
+<br />
+
 Similarly we look at the mean number of events per session across both versions (excluding bounces)
 
 ```{r}
@@ -146,9 +149,13 @@ mean_eventsPerSessionAB_exc_bounce <- eventsPerSessionAB %>% filter(n_events > 1
 mean_eventsPerSessionAB_exc_bounce
 ```
 ```{r}
-ggplot(mean_eventsPerSessionAB_exc_bounce, aes(x=version, y=mean_n_events, fill=version)) + geom_bar(stat="identity")
+ggplot(mean_eventsPerSessionAB_exc_bounce, aes(x=version, y=mean_n_events, fill=version)) + geom_bar(stat="identity") +
+  labs(y="Mean number of events", title="Mean number of events per version (excluding bounces)") + 
+  theme(plot.title = element_text(hjust = 0.5))
 
 ```
+<br />
+
 Here, we can see that version B generates more number of events and consequently has a higher number of mean events. 
 
 
@@ -165,13 +172,16 @@ eventsPerPage
 
 ```{r}
 ggplot(eventsPerPage, aes(x=page, y=n_events, fill=version)) + 
-  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1))
+  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1),
+                                    plot.title = element_text(hjust = 0.5)) +
+  labs(y="Number of events", title="Number of events per page")
 ```
 
 
 <br />
 
-### Time spent in a session (session_duration)
+> ###Metric 2 - Time spent in a session (session_duration) 
+
 Now we look at a second metric, the duration of time spent by users on both versions.
 
 ```{r}
@@ -226,8 +236,10 @@ mean_timePerSessionAB
 ```
 ```{r}
 ggplot(mean_timePerSessionAB, aes(x=version, y=mean_session_duration, fill=version)) +
-  geom_bar(stat="identity")
+  geom_bar(stat="identity") + labs(y="Mean session duration (mins)", title="Mean session duration by version (in mins)") +
+  theme(plot.title = element_text(hjust = 0.5))
 ```
+<br />
 We see that, on average, people spend more time on version A. 
 
 Since all the pages contained in the data are registration-related, it is my assumption that something is causing users on version A to spend more time on this task.   
@@ -240,6 +252,16 @@ This can potentially have undesirable effects, because people usually want to be
 Looking at the mean time spent per page - 
 
 ```{r}
+timeSpentPerPage <- data %>% group_by(sessionId, page, version, is_reg) %>% 
+  arrange(serverTime) %>%
+  summarise("time_spent_mins" = abs(as.numeric(first(serverTime) - last(serverTime),
+                                               units="mins")))
+
+timeSpentPerPage
+```
+
+
+```{r}
 mean_timeSpentPerPage <- timeSpentPerPage %>% group_by(page, version) %>% 
   summarise("mean_time_spent_mins" = mean(time_spent_mins)) %>% arrange(desc(mean_time_spent_mins))
 
@@ -247,9 +269,11 @@ mean_timeSpentPerPage
 ```
 ```{r}
 ggplot(mean_timeSpentPerPage, aes(x=page, y=mean_time_spent_mins, fill=version)) +
-  geom_bar(stat="identity") +theme(axis.text.x = element_text(angle=45, hjust=1))
+  geom_bar(stat="identity") +theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(y="Mean time spent (mins)", title="Mean time spent per page (in mins)") +
+  theme(plot.title = element_text(hjust = 0.5))
 ```
-
+<br />
 While version A overall sees more time spent on average, the 'signup_type_select' page of version B sees an inordinately higher number for that metric.
 
 
@@ -261,7 +285,7 @@ While version A overall sees more time spent on average, the 'signup_type_select
 
 <br /r>
 
-### Metric 3 - Number of registered users (n_users)
+> ###Metric 3 - Number of registered users (n_users)
 
 The number of registered users can be seen here -
 ```{r}
@@ -285,9 +309,10 @@ numUsersAB
 ```
 ```{r}
 ggplot(numUsersAB, aes(x=version, y=n_users, fill=version)) + 
-  geom_bar(stat="identity")
+  geom_bar(stat="identity") + labs(y="Number of registered users", title="Number of registered users per version") + 
+  theme(plot.title = element_text(hjust = 0.5))
 ```
-
+<br />
 
 More than twice as many registered users end up on version B. This means the bulk of users on version A are unregistered. 
 
@@ -304,9 +329,10 @@ numUniqueUsersAB
 ```
 ```{r}
 ggplot(numUniqueUsersAB, aes(x=version, y=n_users, fill=version)) + 
-  geom_bar(stat="identity")
+  geom_bar(stat="identity") + labs(y="Number of unique users", title="Number of unique users per version") + 
+  theme(plot.title = element_text(hjust = 0.5))
 ```
-
+<br />
 Again, we see a similar pattern. More registered users going to B than A. 
 
 
@@ -340,7 +366,8 @@ Again, we see a similar pattern. More registered users going to B than A.
 
 
 < br /> 
-### Metric 4- Bounce rate
+> ###Metric 4- Bounce rate 
+
 The metric we inspect next is the bounce rate (bounce_rate), which is the proportion of sessions that ended after landing on one page only.
 
 Has a session bounced or not? Flagging 1 for 'yes' and 0 for 'no'.
@@ -368,8 +395,10 @@ bounce_rate
 ```
 ```{r}
 ggplot(bounce_rate, aes(x=version, y=bounce_rate, fill=version)) + 
-  geom_bar(stat="identity")
+  geom_bar(stat="identity") + labs(y="Bounce rate", title="Bounce rate per version") + 
+  theme(plot.title = element_text(hjust = 0.5))
 ```
+<br />
 We see that version A has a much higher bounce rate, about twice as much as B. 
 
 
@@ -388,8 +417,11 @@ bouncesPerPage
 ```
 ```{r}
 ggplot(bouncesPerPage, aes(x=page, y=prop_bounce_for_version, fill=version)) +
-  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1))
+  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle=45, hjust=1),
+                                    plot.title = element_text(hjust = 0.5)) +
+  labs(y="Bounce rate", title="Bounce rate per page")
 ```
+<br />
 We see that pages contained in version A consistently have a higher bounce rate than their corresponding version B pages.  
 
 <br />
@@ -406,7 +438,9 @@ bouncesPerWDay
 ```
 ```{r}
 ggplot(bouncesPerWDay, aes(x=wday, y=n_bounces, fill=version)) + 
-  geom_bar(stat="identity", position="dodge")
+  geom_bar(stat="identity", position="dodge") + 
+  labs(y="Number of bounces", title="Number of bounced sessions per day of the week") + 
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
 <br /> 
@@ -427,7 +461,7 @@ ggplot(bouncesPerWDay, aes(x=wday, y=n_bounces, fill=version)) +
 
 
 
-
+> ###A-B testing
 
 #### So far, most of what we have seen are charts and tables constructed from the population. They give us a hint but aren't statistically robust to be counted as definitive evidence. 
 
@@ -526,6 +560,8 @@ ggplot(data = df)+
   geom_point(aes(x=x_B, y=y_B, colour="B")) +
   scale_colour_manual(name="Variants", values=cols)
 ```
+<br /> 
+
 From the binomial distribution using our values of pA and pB, it is clear that version B has a higher number of successes. 
 
 It would appear that version B is likely the better one. 
@@ -555,11 +591,67 @@ ggplot(data = df)+
   geom_point(aes(x=x_B_clt, y=y_B_clt, colour="B")) + 
   scale_colour_manual(name="Variants", values=cols)
 ```
-
+<br /> 
 Even with the repeated trials, we can see that version B outperforms version A with virtually no overlap. 
 
-We can state with reasonable confidence that version B is the better one. 
+####We can state with reasonable confidence that version B is the better one. 
+
+<br /> 
+<br /> 
+
+> ###Addendum - ANOVA
+
+I did this as a part of my analysis. It isn't strictly required to answer our question, but I'm including it anyway.  
+<br /> 
+We use ANOVA to see if the differences between groups of a population (that we defined) are statistically significant
+
+```{r}
+session_data <- left_join(eventsPerSessionAB, timePerSessionAB, 
+                          by=c("sessionId", "version"))
+
+session_data <- left_join(session_data, bounced_yesno, by="sessionId")
+
+session_data <- merge(session_data, data[,c("sessionId", "wday", "day")], by="sessionId")
+
+session_data$bounced <- as.factor(session_data$bounced)
+session_data$is_reg <- as.factor(session_data$is_reg)
+```
+
+ANOVA for differences in number of events grouped by day of the week
+```{r}
+summary(aov(n_events ~ wday, data = session_data))
+```
+
+<br />
+
+ANOVA for differences in duration of session grouped by day of the week
+```{r}
+summary(aov(session_duration ~ wday, data = session_data))
+```
+
+<br /> 
+
+ANOVA for differences in number of events grouped by registration status 
+```{r}
+summary(aov(n_events ~ is_reg, data = session_data))
+```
+
+<br />
+
+ANOVA for differences in duration of session grouped by registration status
+```{r}
+summary(aov(session_duration ~ is_reg, data = session_data))
+
+```
+
+<br /> 
+
+In each of these cases, we see the differences between the groups are statistically significant.
 
 
 
-NB- Along with a few more data projections, I did a some ANOVA and correlation tests, but for the sake of avoiding needless redundancy and having generated a conclusion even without them, I chose not to include them in the document. They are still accessible in my code (insights.R)
+
+
+
+
+
