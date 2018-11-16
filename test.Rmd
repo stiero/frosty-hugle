@@ -1,6 +1,8 @@
 ---
 title: "Quizizz data analysis"
-output: html_document
+output: 
+  html_document:
+    code_folding: show
 ---
 
 
